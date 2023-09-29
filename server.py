@@ -1,6 +1,6 @@
 #  coding: utf-8 
 import socketserver
-
+import os
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,9 +31,49 @@ class MyWebServer(socketserver.BaseRequestHandler):
     
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
-
+        self.data=self.data.decode("utf-8")
+        request=self.data.split('\n')[0]
+      
+        # If not GET request
+        if not request.startswith('GET'):
+            self.request.send(b'HTTP/1.0 405 Method Not Allowed\r\n')
+        else:
+            # check if path exists
+            # make the path for a GET request
+            main_directory=os.path.abspath("www")
+            path=main_directory+request.split()[1]    
+            if(os.path.exists(path)):
+                if path.endswith('html'):
+                    self.render_files('html',path)
+                elif path.endswith('css'):
+                    self.render_files('css',path)
+                elif path.endswith('/'):
+                     self.render_files('html', path+'/index.html')
+                elif "/.." in path:
+                    self.request.send(b'HTTP/1.0 404 Not Found\r\n')
+                    self.request.send(b'\r\n')
+                else:
+                    location='location : {}'.format('http://127.0.0.1:8080'+request+'/')
+                    self.request.send(b'HTTP/1.0 301 Moved Permanently\r\n')
+                    self.request.send(b'Content-Type: text/html\n')
+                    self.request.send(bytearray(location,'utf-8'))
+                    self.request.send(b'\r\n')
+            else:
+                self.request.send(b'HTTP/1.0 404 Not Found\r\n')
+                self.request.send(b'\r\n')
+            
+    # render files 
+    def render_files(self,request_type,path):
+        file_response=open(path).read()
+        if request_type=='css':
+            mimetype='text/css'
+        if request_type=='html':
+            mimetype='text/html'
+        self.request.send(b'HTTP/1.0 200 OK\n') 
+        self.request.send(bytearray('Content-Type: {} \n'.format(mimetype),'utf-8'))
+        self.request.send(b'\n')
+        self.request.send(bytearray(file_response,'utf-8'))
+    
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
 
